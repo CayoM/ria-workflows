@@ -1,0 +1,255 @@
+name: Reset-Nodes
+platform: node
+blocks:
+  - action: if
+    name: If_1
+    condition: $node_type == "5G"
+    then:
+      - action: assign
+        name: Assign_2
+        variable: $proxmox_auth
+        value: '"Proxmox-ontour"'
+      - action: assign
+        name: Assign_3
+        variable: $backup_name
+        value: '"/var/lib/vz/dump/vzdump-qemu-101-2025_10_08-17_57_17.vma.zst"'
+      - action: assign
+        name: Assign_4
+        variable: $auth_token
+        value: '"6ce48c4c-89fc-408d-8f75-53bd67d93980"'
+      - action: assign
+        name: Assign_5
+        variable: $target_ip
+        value: '"192.168.1.154"'
+      - action: assign
+        name: Assign_6
+        variable: $worker_group
+        value: '"CS-OnTour"'
+    else:
+      - action: assign
+        name: Assign_2_1
+        variable: $proxmox_auth
+        value: '"admin/Proxmox-onprem"'
+      - action: assign
+        name: Assign_7
+        variable: $auth_token
+        value: '"7b0cfc7b-4195-46e8-be1a-eaf303029e37"'
+      - action: assign
+        name: Assign_3_1
+        variable: $backup_name
+        value: '"/var/lib/vz/dump/vzdump-qemu-101-2025_10_07-14_03_38.vma.zst"'
+      - action: assign
+        name: Assign_8
+        variable: $target_ip
+        value: '"192.168.1.153"'
+      - action: assign
+        name: Assign_9
+        variable: $worker_group
+        value: '"CS-OnPrem"'
+  - action: system/Proxmox/Nodes/Qemu/Status/Stop/Vm Stop
+    name: Proxmox_1
+    workerGroup: $worker_group
+    inputs:
+      - name: authKey
+        value: $proxmox_auth
+      - name: keepActive
+        value: "0"
+      - name: node
+        value: '"node1"'
+      - name: skiplock
+        value: "1"
+      - name: vmid
+        value: "101"
+  - action: system/Common/HTTP/HTTP Request
+    name: HTTPRequest_1_2
+    workerGroup: $worker_group
+    inputs:
+      - name: method
+        value: '"POST"'
+      - name: host
+        value: $target_ip
+      - name: protocol
+        value: '"https"'
+      - name: port
+        value: "8006"
+      - name: path
+        value: '"/api2/json/access/ticket"'
+      - name: headers
+        value: |-
+          {
+              "Content-Type": "application/x-www-form-urlencoded"
+          }
+      - name: body
+        value: |-
+          {
+              "username": "root@pam",
+              "password": "passw0rd"
+          }
+      - name: bodyEncoding
+        value: '"default"'
+  - action: system/Common/HTTP/HTTP Request
+    name: HTTPRequest_1
+    workerGroup: $worker_group
+    inputs:
+      - name: method
+        value: '"POST"'
+      - name: host
+        value: $target_ip
+      - name: protocol
+        value: '"https"'
+      - name: port
+        value: "8006"
+      - name: path
+        value: '"/api2/json/nodes/node1/qemu"'
+      - name: headers
+        value: |-
+          {
+              "Cookie": "PVEAuthCookie=" + $HTTPRequest_1_2.result.data.ticket,
+              "Content-Type": "application/json",
+              "CSRFPreventionToken": $HTTPRequest_1_2.result.data.CSRFPreventionToken
+          }
+      - name: body
+        value: |-
+          {
+              "node": "node1",
+              "vmid": 101,
+              "archive": $backup_name,
+              "force": 1,
+              "storage": "bulk"
+          }
+      - name: bodyEncoding
+        value: '"default"'
+  - action: while
+    name: While_1
+    condition: $loop == true
+    blocks:
+      - action: system/Common/HTTP/HTTP Request
+        name: HTTPRequest_1_1
+        workerGroup: $worker_group
+        inputs:
+          - name: method
+            value: '"GET"'
+          - name: host
+            value: $target_ip
+          - name: protocol
+            value: '"https"'
+          - name: port
+            value: "8006"
+          - name: path
+            value: '"/api2/json/nodes/node1/tasks/" + $HTTPRequest_1.result.data +
+              "/status"'
+          - name: headers
+            value: |-
+              {
+                  "Cookie": "PVEAuthCookie=" + $HTTPRequest_1_2.result.data.ticket,
+                  "Content-Type": undefined,
+                  "CSRFPreventionToken": $HTTPRequest_1_2.result.data.CSRFPreventionToken
+              }
+      - action: if
+        name: If_2
+        condition: $HTTPRequest_1_1.result.data.status == "stopped"
+        then:
+          - action: assign
+            name: Assign_10
+            variable: $loop
+            value: "false"
+        else: []
+      - action: system/Common/Sleep
+        name: Sleep_1
+        inputs:
+          - name: seconds
+            value: "5"
+      - action: system/Common/Status Message Update
+        name: StatusMessageUpdate_1
+        inputs:
+          - name: message
+            value: "\"Status: \"+$HTTPRequest_1_1.result.data"
+  - action: system/Proxmox/Nodes/Qemu/Status/Start/Vm Start
+    name: Proxmox_2
+    workerGroup: $worker_group
+    inputs:
+      - name: authKey
+        value: $proxmox_auth
+      - name: node
+        value: '"node1"'
+      - name: vmid
+        value: "101"
+  - action: assign
+    name: Assign_1
+    variable: $result
+    value: "\"Hello, World!\""
+    breakpoint: enabled
+variables:
+  - name: result
+    required: false
+    isInput: false
+    isOutput: true
+    level: INTERMEDIATE
+    type:
+      type: any
+    value: '""'
+  - name: node_type
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"5G"'
+  - name: backup_name
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '""'
+  - name: target_ip
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '""'
+  - name: proxmox_auth
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '""'
+    meta:
+      authType: ANY
+      subType: authentication
+  - name: auth_token
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '""'
+  - name: worker_group
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '""'
+  - name: loop
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: boolean
+    value: "true"
+meta:
+  version: 5
+  description: Reset On Premise / 5G nodes to pre demo state.
+  layout: flow
+  workerGroup: default
+finally: null

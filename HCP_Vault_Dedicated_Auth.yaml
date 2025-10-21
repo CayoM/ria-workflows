@@ -1,0 +1,65 @@
+name: HCP_Vault_Dedicated_Auth
+platform: node
+blocks:
+  - action: system/Common/Config Data/Get Config Data
+    name: GetConfigData_1
+    inputs:
+      - name: authKey
+        value: $HCP_CLIENT_AUTH
+  - action: system/Common/HTTP/HTTP Request
+    name: HTTPRequest_1
+    inputs:
+      - name: method
+        value: '"POST"'
+      - name: host
+        value: $GetConfigData_1.result.url+"/v1/auth/approle/login"
+      - name: headers
+        value: |-
+          {
+              "X-Vault-Namespace": $GetConfigData_1.result.namespace
+          }
+      - name: body
+        value: |-
+          {
+              "role_id": $GetConfigData_1.result.id,
+              "secret_id": $GetConfigData_1.result.secret
+          }
+  - action: system/Common/JSON/jq
+    name: jq_1
+    inputs:
+      - name: JSON
+        value: $HTTPRequest_1.result
+      - name: Filter
+        value: '".auth.client_token"'
+  - action: assign
+    name: Assign_1
+    variable: $result
+    value: $jq_1.result
+    breakpoint: enabled
+variables:
+  - name: result
+    required: false
+    isInput: false
+    isOutput: true
+    level: INTERMEDIATE
+    type:
+      type: any
+    value: '""'
+  - name: HCP_CLIENT_AUTH
+    required: true
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"admin/vault"'
+    meta:
+      authType: ANY
+      subType: authentication
+meta:
+  version: 5
+  description: "authenticate to HCP Vault to obtain a Token, which can be used to\
+    \ retrieve secrets"
+  layout: flow
+  workerGroup: default
+finally: null

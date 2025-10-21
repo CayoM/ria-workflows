@@ -1,0 +1,131 @@
+name: Prepare-AWX
+platform: node
+blocks:
+  - action: ./HCP_Vault_Dedicated_Get_Secret
+    name: AWX_Password
+    inputs:
+      - name: secret_name
+        value: $AWX_PASSWORD_SECRET_NAME
+      - name: HCP_AUTH_SECRET
+        value: $VAULT_SECRET
+      - name: HCP_VAULT_URL
+        value: $VAULT_URL
+      - name: HCP_VAULT_NAMESPACE
+        value: $VAULT_NAMESPACE
+  - name: AuthOverride_1
+    action: authOverride
+    authentication: '"admin/awx"'
+    override: "{\"host\":$AAP_URL,\"username\":\"admin\",\"password\":$AWX_Password.result}"
+  - action: system/Ansible/Tower/Projects/Projects Create
+    name: Create_Project
+    inputs:
+      - name: authKey
+        value: $AuthOverride_1.result
+      - name: data
+        value: |-
+          {
+              "allow_override": true,
+              "name": "RIA-Project-automated",
+              "organization": 1,
+              "scm_type": "git",
+              "scm_url": $GIT_URL
+          }
+  - action: system/Ansible/Tower/Job Templates/Job Templates Create
+    name: Create_Template
+    inputs:
+      - name: authKey
+        value: $AuthOverride_1.result
+      - name: data
+        value: |-
+          {
+              "ask_variables_on_launch": true,
+              "name": $template_name,
+              "organization": 1,
+              "playbook": $playbook_name,
+              "project": $Create_Project.result.id,
+              "inventory": 1
+          }
+  - action: system/Ansible/Tower/Job Templates/Job Templates Credentials Create
+    name: Add_Default_credential_to_Template
+    inputs:
+      - name: authKey
+        value: $AuthOverride_1.result
+      - name: id
+        value: $Create_Template.result.id
+      - name: data
+        value: "{\"id\": 1}"
+variables:
+  - name: AWX_PASSWORD_SECRET_NAME
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"awx_admin_password_cs"'
+  - name: VAULT_URL
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"https://ria-demo-cluster-public-vault-65f83eee.f89bf1f5.z1.hashicorp.cloud:8200"'
+  - name: VAULT_NAMESPACE
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"admin"'
+  - name: VAULT_SECRET
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"admin/vault"'
+    meta:
+      authType: ANY
+      subType: authentication
+  - name: AAP_URL
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"awx-awx.apps.itz-hs0zgu.hub01-lb.techzone.ibm.com/"'
+  - name: GIT_URL
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"https://github.com/CayoM/ria-ansible"'
+  - name: template_name
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"setup-ec2-instance-automated"'
+  - name: playbook_name
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"playbook-ria.yaml"'
+meta:
+  version: 5
+  description: Prepare an AWX Instance (create Templates and Projects) for End-To-End
+    Automation
+  layout: flow
+  workerGroup: default
+finally: null

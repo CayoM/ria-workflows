@@ -1,0 +1,404 @@
+name: Create_HCP_Terraform_Workspace
+platform: node
+blocks:
+  - action: foreach
+    name: Get_secrets
+    list: $SECRETS
+    blocks:
+      - action: ./HCP_Vault_Dedicated_Get_Secret
+        name: get_secret
+        inputs:
+          - name: secret_name
+            value: $Get_secrets.item
+          - name: HCP_AUTH_SECRET
+            value: $HCP_VAULT_AUTH_SECRET
+      - action: system/Common/Array/Array Push
+        name: ArrayPush_1
+        inputs:
+          - name: array
+            value: $retrieved_secrets
+          - name: item
+            value: |-
+              {
+                  "Name": $Get_secrets.item,
+                  "Content": $get_secret.result
+              }
+  - action: system/Common/Status Message Update
+    name: StatusMessageUpdate_1
+    inputs:
+      - name: message
+        value: "\"Retrieved Secrets successfully: \"+$retrieved_secrets"
+  - action: system/Common/JSON/jq
+    name: filter_terraform_api_key
+    inputs:
+      - name: JSON
+        value: $retrieved_secrets
+      - name: Filter
+        value: "\".[] | select(.Name == \\\"\" + $HCP_TERRAFORM_ENTERPRISE_TOKEN_IDENTIFIER\
+          \ + \"\\\") | .Content\""
+  - action: system/Common/JSON/jq
+    name: filter_terraform_oauth_token_id
+    inputs:
+      - name: JSON
+        value: $retrieved_secrets
+      - name: Filter
+        value: "\".[] | select(.Name == \\\"\" + $HCP_TERRAFORM_OAUTH_TOKEN_IDENTIFIER\
+          \ + \"\\\") | .Content\""
+  - action: comment
+    value: Override authentication in order to use the token fetched from HCP Vault
+  - name: AuthOverride_1
+    action: authOverride
+    authentication: '"admin/terraform"'
+    override: "{\"apiKey\":$filter_terraform_api_key.result}"
+    breakpoint: enabled
+  - action: comment
+    value: Use correct branch containing the Terraform code
+  - action: if
+    name: If_3
+    breakpoint: enabled
+    condition: $feature_turbonomic
+    then:
+      - action: assign
+        name: Assign_3
+        variable: $HCP_TERRAFORM_WORKSPACE_BRANCH
+        value: '"turbonomic"'
+    else:
+      - action: assign
+        name: Assign_2
+        variable: $HCP_TERRAFORM_WORKSPACE_BRANCH
+        value: '"main"'
+  - action: system/HashiCorp/Terraform/Workspaces/Create a Workspace
+    name: create_workspace
+    inputs:
+      - name: authKey
+        value: $AuthOverride_1.result
+      - name: body
+        value: |-
+          {
+              "data": {
+                  "attributes": {
+                      "vcs-repo": {
+                          "oauth-token-id": $filter_terraform_oauth_token_id.result,
+                          "branch": $HCP_TERRAFORM_WORKSPACE_BRANCH,
+                          "identifier": $WORKSPACE_VCS_IDENTIFIER
+                      },
+                      "execution-mode": $WORKSPACE_EXECUTION_MODE,
+                      "allow-destroy-plan": true,
+                      "auto-apply": true,
+                      "name": $HCP_TERRAFORM_WORKSPACE_NAME,
+                      "auto-destroy-activity-duration": $WORKSPACE_AUTO_DESTROY_DURATION
+                  }
+              }
+          }
+      - name: organization_name
+        value: $HCP_TERRAFORM_ORG_NAME
+  - action: foreach
+    name: ForEach_1
+    list: $retrieved_secrets
+    blocks:
+      - action: if
+        name: If_1
+        condition: ($ForEach_1.item.Name != $HCP_TERRAFORM_ENTERPRISE_TOKEN_IDENTIFIER)
+          && ($ForEach_1.item.Name != $HCP_TERRAFORM_OAUTH_TOKEN_IDENTIFIER)
+        then:
+          - action: comment
+            value: |
+              This fork is only necessary if you create different secrets with a userbased suffix (in my case _cs to not override existing secrets)
+          - action: if
+            name: If_2
+            condition: $ForEach_1.item.Name.includes("_cs")
+            then:
+              - action: system/HashiCorp/Terraform/Workspace Variables/Create a Variable
+                name: Create_workspace_var_1
+                inputs:
+                  - name: authKey
+                    value: $AuthOverride_1.result
+                  - name: body
+                    value: |-
+                      {
+                          "data": {
+                              "type": "vars",
+
+                              "attributes": {
+                                  "key": $ForEach_1.item.Name.replace("_cs", ""),
+                                  "value": $ForEach_1.item.Content,
+                                  "sensitive": true,
+                                  "category": "terraform"
+                              }
+                          }
+                      }
+                  - name: workspace_id
+                    value: $create_workspace.result.data.id
+            else:
+              - action: system/HashiCorp/Terraform/Workspace Variables/Create a Variable
+                name: Create_workspace_var
+                inputs:
+                  - name: authKey
+                    value: $AuthOverride_1.result
+                  - name: body
+                    value: |-
+                      {
+                          "data": {
+                              "type": "vars",
+                              "attributes": {
+                                  "key": $ForEach_1.item.Name,
+                                  "value": $ForEach_1.item.Content,
+                                  "sensitive": true,
+                                  "category": "terraform"
+                              }
+                          }
+                      }
+                  - name: workspace_id
+                    value: $create_workspace.result.data.id
+        else: []
+  - action: system/HashiCorp/Terraform/Workspace Variables/Create a Variable
+    name: create_var_instance_type
+    inputs:
+      - name: authKey
+        value: $AuthOverride_1.result
+      - name: body
+        value: |-
+          {
+              "data": {
+                  "type": "vars",
+                  "attributes": {
+                      "key": "instance_type",
+                      "value": $TERRAFORM_INSTANCE_TYPE,
+                      "category": "terraform"
+                  }
+              }
+          }
+      - name: workspace_id
+        value: $create_workspace.result.data.id
+  - action: system/HashiCorp/Terraform/Workspace Variables/Create a Variable
+    name: create_var_role
+    inputs:
+      - name: authKey
+        value: $AuthOverride_1.result
+      - name: body
+        value: |-
+          {
+              "data": {
+                  "type": "vars",
+                  "attributes": {
+                      "key": "role",
+                      "value": $service_type,
+                      "category": "terraform"
+                  }
+              }
+          }
+      - name: workspace_id
+        value: $create_workspace.result.data.id
+  - action: system/HashiCorp/Terraform/Workspace Variables/Create a Variable
+    name: create_var_instance_name
+    inputs:
+      - name: authKey
+        value: $AuthOverride_1.result
+      - name: body
+        value: |-
+          {
+              "data": {
+                  "type": "vars",
+                  "attributes": {
+                      "key": "instance_name",
+                      "value": $HCP_TERRAFORM_WORKSPACE_NAME,
+                      "category": "terraform"
+                  }
+              }
+          }
+      - name: workspace_id
+        value: $create_workspace.result.data.id
+  - action: system/Common/cURL/cURL
+    name: trigger_run
+    inputs:
+      - name: command
+        value: "\"curl --header \\\"Authorization: Bearer \" + $filter_terraform_api_key.result\
+          \ + \"\\\" --header \\\"Content-Type: application/vnd.api+json\\\" --request\
+          \ POST --data-raw '{\\\"data\\\":{\\\"attributes\\\":{\\\"replace-addrs\\\
+          \":[],\\\"is-destroy\\\":false,\\\"refresh\\\":true,\\\"refresh-only\\\"\
+          :false,\\\"allow-config-generation\\\":true,\\\"debugging-mode\\\":false},\\\
+          \"relationships\\\":{\\\"workspace\\\":{\\\"data\\\":{\\\"type\\\":\\\"\
+          workspaces\\\",\\\"id\\\":\\\"\" + $create_workspace.result.data.id + \"\
+          \\\"}}},\\\"type\\\":\\\"runs\\\"}}'  https://app.terraform.io/api/v2/runs\""
+  - action: ./monitor-run
+    name: Monitor_Workspace_Run
+    inputs:
+      - name: id
+        value: $trigger_run.result.data.id
+      - name: terraform_auth
+        value: $AuthOverride_1.result
+  - action: system/HashiCorp/Terraform/State Versions/Fetch the Current State Version
+      for a Workspace
+    name: HashiCorp_1
+    inputs:
+      - name: authKey
+        value: $AuthOverride_1.result
+      - name: workspace_id
+        value: $create_workspace.result.data.id
+  - action: foreach
+    name: ForEach_2
+    list: $HashiCorp_1.result.data.relationships.outputs.data
+    blocks:
+      - action: system/HashiCorp/Terraform/State Version Outputs/Show a State Version
+          Output
+        name: HashiCorp_2
+        inputs:
+          - name: authKey
+            value: $AuthOverride_1.result
+          - name: state_version_output_id
+            value: $ForEach_2.item.id
+      - action: system/Common/Object/Object Set Property
+        name: ObjectSetProperty_1
+        inputs:
+          - name: targetObject
+            value: $result
+          - name: propertyName
+            value: $HashiCorp_2.result.data.attributes.name
+          - name: propertyValue
+            value: $HashiCorp_2.result.data.attributes.value
+        breakpoint: enabled
+  - action: assign
+    name: Assign_1
+    variable: $result
+    value: $HashiCorp_2.result.data.attributes.value
+    breakpoint: enabled
+    skipped: true
+variables:
+  - name: result
+    required: false
+    isInput: false
+    isOutput: true
+    level: INTERMEDIATE
+    type:
+      type: object
+    value: "{}"
+  - name: HCP_TERRAFORM_ENTERPRISE_TOKEN_IDENTIFIER
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"terraform_api_key"'
+  - name: HCP_TERRAFORM_OAUTH_TOKEN_IDENTIFIER
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"terraform_oauth_token_id"'
+  - name: HCP_TERRAFORM_ORG_NAME
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"cayo-org"'
+  - name: WORKSPACE_EXECUTION_MODE
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"remote"'
+  - name: WORKSPACE_AUTO_DESTROY_DURATION
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"1h"'
+  - name: WORKSPACE_VCS_IDENTIFIER
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"CayoM/ria-terraform"'
+  - name: SECRETS
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: array
+    value: |-
+      [
+          "terraform_oauth_token_id",
+          "terraform_api_key",
+          "vault_role_id",
+          "vault_secret_id",
+          "vault_url"
+      ]
+  - name: retrieved_secrets
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: array
+    value: "[]"
+  - name: HCP_TERRAFORM_WORKSPACE_NAME
+    required: true
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"cayo"'
+  - name: HCP_TERRAFORM_WORKSPACE_BRANCH
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"turbonomic"'
+  - name: TERRAFORM_INSTANCE_TYPE
+    required: true
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"t3.micro"'
+  - name: HCP_VAULT_AUTH_SECRET
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"admin/vault"'
+    meta:
+      authType: Common/ConfigData
+      subType: authentication
+  - name: feature_turbonomic
+    required: true
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: boolean
+    value: "true"
+  - name: service_type
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"frontend"'
+meta:
+  version: 5
+  layout: flow
+  workerGroup: default
+  description: "This workflow creates a Workspace in HCP Terraform, populates it with\
+    \ variables (mostly secrets from HCP Vault Secrets). The workspace is set to delete\
+    \ all resources after 1 hour."
+finally: null

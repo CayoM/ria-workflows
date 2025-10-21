@@ -1,0 +1,455 @@
+name: End-to-End-Automation
+platform: node
+blocks:
+  - action: switch
+    name: SwitchCase_1
+    expression: $instance_type
+    cases:
+      - value: '"On Premise"'
+        blocks:
+          - action: assign
+            name: Assign_10
+            variable: $worker_group
+            value: '"CS-OnPrem"'
+          - action: assign
+            name: Assign_3
+            variable: $target_ip
+            value: $onprem_ip
+          - action: ./HCP_Vault_Dedicated_Get_Secret
+            name: User_1
+            inputs:
+              - name: secret_name
+                value: '"ssh_key_onprem"'
+              - name: HCP_AUTH_SECRET
+                value: $vault_auth
+          - action: assign
+            name: Assign_4
+            variable: $ssh_key
+            value: $User_1.result
+          - action: assign
+            name: Assign_5
+            variable: $port
+            value: "27001"
+      - value: '"5G"'
+        blocks:
+          - action: assign
+            name: Assign_10_1
+            variable: $worker_group
+            value: '"CS-OnTour"'
+          - action: assign
+            name: Assign_6
+            variable: $target_ip
+            value: $5g_ip
+          - action: ./HCP_Vault_Dedicated_Get_Secret
+            name: User_2
+            inputs:
+              - name: secret_name
+                value: '"ssh_key_onprem"'
+              - name: HCP_AUTH_SECRET
+                value: $vault_auth
+          - action: assign
+            name: Assign_7
+            variable: $ssh_key
+            value: $User_2.result
+          - action: assign
+            name: Assign_8
+            variable: $port
+            value: "22"
+    default:
+      - action: ./Create_HCP_Terraform_Workspace
+        name: Provision_with_Terraform
+        inputs:
+          - name: HCP_TERRAFORM_WORKSPACE_NAME
+            value: $instance_name
+          - name: TERRAFORM_INSTANCE_TYPE
+            value: $instance_type
+          - name: HCP_VAULT_AUTH_SECRET
+            value: $vault_auth
+      - action: assign
+        name: Assign_2
+        variable: $target_ip
+        value: $Provision_with_Terraform.result.instance_ip
+      - action: ./HCP_Vault_Dedicated_Get_Secret
+        name: User_3
+        inputs:
+          - name: secret_name
+            value: '"ssh_private_key"'
+          - name: HCP_AUTH_SECRET
+            value: $vault_auth
+      - action: assign
+        name: Assign_9
+        variable: $ssh_key
+        value: $User_3.result
+  - action: ./HCP_Vault_Dedicated_Patch_Secret
+    name: Add_SSH_Key_to_vault
+    inputs:
+      - name: secret_name
+        value: '"ssh_key"'
+      - name: HCP_AUTH_SECRET
+        value: $vault_auth
+      - name: secret_value
+        value: $Provision_with_Terraform.result.ssh_key
+    skipped: true
+  - action: ./HCP_Vault_Dedicated_Get_Secret
+    name: get_aap_password
+    inputs:
+      - name: secret_name
+        value: $aap_password_secret_name
+      - name: HCP_AUTH_SECRET
+        value: $vault_auth
+  - action: ./HCP_Vault_Dedicated_Get_Secret
+    name: get_aap_url
+    inputs:
+      - name: secret_name
+        value: $aap_url_secret_name
+      - name: HCP_AUTH_SECRET
+        value: $vault_auth
+  - name: AAP_Auth
+    action: authOverride
+    authentication: '"admin/awx"'
+    override: "{\"host\":$get_aap_password.result,\"username\":\"admin\",\"password\"\
+      :$get_aap_password.result}"
+  - action: system/Ansible/Tower/Credentials/Credentials Update
+    name: Ansible_1
+    inputs:
+      - name: authKey
+        value: $AAP_Auth.result
+      - name: id
+        value: "1"
+      - name: data
+        value: |-
+          {
+              "credential_type": 1,
+
+              "inputs": {
+                  "ssh_key_data": $ssh_key,
+                  "username": $ssh_username
+              },
+              "name": "Default",
+              "organization": 1
+          }
+  - action: ./HCP_Vault_Dedicated_Get_Secret
+    name: get_secret_instana_agent_key
+    inputs:
+      - name: secret_name
+        value: '"instana_agent_key"'
+      - name: HCP_AUTH_SECRET
+        value: $vault_auth
+  - action: ./HCP_Vault_Dedicated_Get_Secret
+    name: get_secret_hcm_mesh_api_key
+    inputs:
+      - name: secret_name
+        value: '"hcm_mesh_api_key"'
+      - name: HCP_AUTH_SECRET
+        value: $vault_auth
+  - action: ./HCP_Vault_Dedicated_Get_Secret
+    name: get_secret_pull_secret
+    inputs:
+      - name: secret_name
+        value: '"pull_secret"'
+      - name: HCP_AUTH_SECRET
+        value: $vault_auth
+  - action: system/Common/Object/Object Set Property
+    name: set_ansible_job_tags
+    inputs:
+      - name: targetObject
+        value: $aap_job_data
+      - name: propertyName
+        value: '"job_tags"'
+      - name: propertyValue
+        value: $tags
+    skipped: true
+  - action: system/Common/Object/Object Set Property
+    name: set_ansible_extra_vars
+    inputs:
+      - name: targetObject
+        value: $aap_job_data
+      - name: propertyName
+        value: '"extra_vars"'
+      - name: propertyValue
+        value: |-
+          {
+              "ec2_ip": $target_ip,
+              "instana_agent_key": $get_secret_instana_agent_key.result,
+              "registry_pwd": $get_secret_pull_secret.result,
+              "mesh_api_key": $get_secret_hcm_mesh_api_key.result,
+              "instance_name": $instance_name,
+              "service_type": $service_type,
+              "location": $location,
+              "ansible_port": $port,
+              "remote_user": $ssh_username,
+              "feature_kubecost": $feature_kubecost,
+              "feature_instana": $feature_instana,
+              "feature_sevone": $feature_sevone,
+              "feature_turbonomic": $feature_turbonomic,
+              "feature_hcm": $feature_hcm,
+              "app_name": $app_name
+          }
+  - action: if
+    name: If_1
+    condition: $instance_type == "5G"
+    then:
+      - action: ./AAP-run-job-by-name
+        name: Configure_with_ansible_1
+        inputs:
+          - name: aap_job_name
+            value: '"setup-ec2-5g"'
+          - name: launch_data
+            value: $aap_job_data
+          - name: AAP_AUTH
+            value: $AAP_Auth.result
+    else:
+      - action: ./AAP-run-job-by-name
+        name: Configure_with_ansible
+        inputs:
+          - name: aap_job_name
+            value: '"setup-ec2-instance-automated"'
+          - name: launch_data
+            value: $aap_job_data
+          - name: AAP_AUTH
+            value: $AAP_Auth.result
+  - action: if
+    name: If_2
+    condition: $instance_type == "5G" || $instance_type == "On Premise"
+    then:
+      - name: AuthOverride_1
+        action: authOverride
+        authentication: '"admin/blank-ssh"'
+        override: "{\"host\":$target_ip,\"port\":$port,\"username\":$ssh_username,\"\
+          privateKey\":$ssh_key}"
+      - action: system/Common/SSH/SSH
+        name: SSH_1
+        workerGroup: $worker_group
+        inputs:
+          - name: authKey
+            value: $AuthOverride_1.result
+          - name: command
+            value: "`sudo ./add_text.sh \"Deployment successful \\n ${$instance_name}\
+              \ - ${$target_ip}\" empty-logo-slide.png display.png`"
+      - action: system/Common/SSH/SSH
+        name: SSH_1_1_1
+        skipped: true
+        workerGroup: $worker_group
+        inputs:
+          - name: authKey
+            value: $AuthOverride_1.result
+          - name: command
+            value: '`sudo apt install -y mpv`'
+      - action: system/Common/SSH/SSH
+        name: SSH_1_1
+        workerGroup: $worker_group
+        inputs:
+          - name: authKey
+            value: $AuthOverride_1.result
+          - name: command
+            value: '`sudo systemd-run --unit=show-image --remain-after-exit  mpv --vo=gpu
+              --gpu-context=drm --drm-connector=auto     --no-audio --image-display-duration=inf
+              --keep-open=yes  /home/ubuntu/display.png`'
+          - name: port
+            value: $port
+      - action: system/Common/Status Message Update
+        name: StatusMessageUpdate_1
+        breakpoint: enabled
+    else:
+      - action: assign
+        name: Assign_1
+        variable: $result
+        value: $Provision_with_Terraform.result
+        breakpoint: enabled
+variables:
+  - name: result
+    required: false
+    isInput: false
+    isOutput: true
+    level: INTERMEDIATE
+    type:
+      type: any
+    value: '""'
+  - name: instance_name
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"Mobile"'
+  - name: instance_type
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"5G"'
+  - name: service_type
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"backend"'
+  - name: location
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"south"'
+  - name: tags
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '""'
+  - name: aap_job_data
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: object
+    value: "{}"
+  - name: vault_auth
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"admin/vault"'
+    meta:
+      authType: ANY
+      subType: authentication
+  - name: aap_url_secret_name
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"awx_url"'
+  - name: aap_password_secret_name
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"awx_admin_password"'
+  - name: target_ip
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '""'
+  - name: port
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: number
+    value: "22"
+  - name: app_name
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"robotshop"'
+  - name: feature_kubecost
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: boolean
+    value: "false"
+  - name: feature_instana
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: boolean
+    value: "false"
+  - name: feature_sevone
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: boolean
+    value: "false"
+  - name: feature_hcm
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: boolean
+    value: "true"
+  - name: feature_turbonomic
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: boolean
+    value: "false"
+  - name: ssh_key
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '""'
+  - name: ssh_username
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"ubuntu"'
+  - name: worker_group
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '""'
+  - name: onprem_ip
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '""'
+  - name: 5g_ip
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '""'
+meta:
+  version: 5
+  layout: flow
+  workerGroup: default
+  description: "End-to-End Automation: Fetch secrets from HCP Vault, Provision Resources\
+    \ from AWS with Terraform (using Turbonomic Provider), Configure the resources\
+    \ with Ansible. The Ansible Role can do multiple things: setup a k3s cluster,\
+    \ deploy QoTD App, Install Instana Agent and connect to Instana Backend."
+finally: null

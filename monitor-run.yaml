@@ -1,0 +1,106 @@
+name: monitor-run
+platform: node
+blocks:
+  - action: while
+    name: Monitor_Run
+    condition: $loop
+    blocks:
+      - action: system/HashiCorp/Terraform/Runs/Get run details
+        name: run
+        inputs:
+          - name: authKey
+            value: $terraform_auth
+          - name: run_id
+            value: $id
+      - action: system/Common/Status Message Update
+        name: StatusMessageUpdate_1
+        inputs:
+          - name: message
+            value: "\"Waiting on Run for \" + $seconds + \" Seconds, current state:\
+              \ \" + $run.result.data.attributes.status+\" Should be \"+$target_state"
+      - action: if
+        name: Watch_For_error
+        condition: $run.result.data.attributes.status=="errored"
+        then:
+          - action: throw
+            error: "$run.result.data.attributes[\"error-text\"]"
+        else: []
+      - action: if
+        name: If_1
+        condition: $run.result.data.attributes.status==$target_state
+        then:
+          - action: assign
+            name: Assign_2
+            variable: $loop
+            value: "false"
+        else:
+          - action: system/Common/Sleep
+            name: Sleep_1
+            inputs:
+              - name: seconds
+                value: "5"
+      - action: assign
+        name: Assign_3
+        variable: $seconds
+        value: $seconds+5
+  - action: assign
+    name: Assign_1
+    variable: $result
+    value: $run
+variables:
+  - name: result
+    required: false
+    isInput: false
+    isOutput: true
+    level: INTERMEDIATE
+    type:
+      type: object
+    value: "{}"
+  - name: id
+    required: true
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '""'
+  - name: target_state
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"applied"'
+  - name: terraform_auth
+    required: true
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '""'
+    meta:
+      authType: HashiCorp/Terraform
+      subType: authentication
+  - name: loop
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: boolean
+    value: "true"
+  - name: seconds
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: number
+    value: "0"
+meta:
+  version: 5
+  layout: flow
+  workerGroup: default
+finally: null

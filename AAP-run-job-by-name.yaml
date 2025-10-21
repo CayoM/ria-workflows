@@ -1,0 +1,142 @@
+name: AAP-run-job-by-name
+platform: node
+blocks:
+  - action: system/Ansible/Tower/Job Templates/Job Templates List
+    name: Ansible_2
+    inputs:
+      - name: authKey
+        value: $AAP_AUTH
+      - name: search
+        value: $aap_job_name
+  - action: system/Common/JSON/jq
+    name: job_id
+    inputs:
+      - name: JSON
+        value: $Ansible_2.result
+      - name: Filter
+        value: "\" .results[] | select( [.name==\\\"\" + $aap_job_name + \"\\\"  ]\
+          \ | any) |  .id \""
+  - action: system/Common/Status Message Update
+    name: StatusMessageUpdate_2
+    inputs:
+      - name: message
+        value: '"JOB ID:" + String($job_id.result)'
+    breakpoint: enabled
+  - action: system/Ansible/Tower/Job Templates/Job Templates Launch Create
+    name: Launched_job
+    inputs:
+      - name: authKey
+        value: $AAP_AUTH
+      - name: id
+        value: $job_id.result
+      - name: data
+        value: $launch_data
+  - action: while
+    name: While_1
+    breakpoint: enabled
+    condition: $condition == true
+    blocks:
+      - action: system/Common/Sleep
+        name: Sleep_1
+        inputs:
+          - name: seconds
+            value: "10"
+      - action: system/Ansible/Tower/Jobs/Jobs Read 0
+        name: Ansible_1
+        inputs:
+          - name: authKey
+            value: $AAP_AUTH
+          - name: id
+            value: $Launched_job.result.job
+      - action: system/Common/Status Message Update
+        name: StatusMessageUpdate_1
+        inputs:
+          - name: message
+            value: '"Ping"'
+      - action: if
+        name: If_1
+        condition: $Ansible_1.result.status == "successful"
+        then:
+          - action: assign
+            name: Assign_2
+            variable: $condition
+            value: "false"
+        else:
+          - action: if
+            name: If_2
+            condition: $Ansible_1.result.status == "failed"
+            then:
+              - action: throw
+                error: "\"Error running Job: \" + $aap_job_name + \" With Parameters:\
+                  \ \" + $Launched_job.result + \" Launch data: \" + $launch_data"
+            else: []
+  - action: assign
+    name: Assign_1
+    variable: $result
+    value: $Ansible_1.result.status
+  - action: assign
+    name: Assign_3
+    variable: $output
+    value: $Ansible_1.result.artifacts
+variables:
+  - name: aap_job_name
+    required: true
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"setup-ec2-instance"'
+  - name: result
+    required: false
+    isInput: false
+    isOutput: true
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '""'
+  - name: condition
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: boolean
+    value: "true"
+  - name: output
+    required: false
+    isInput: false
+    isOutput: true
+    level: INTERMEDIATE
+    type:
+      type: object
+    value: "{}"
+  - name: launch_data
+    required: false
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: object
+    value: |-
+      {
+          "job_tags": "",
+          "extra_vars": "ec2_ip: 3.120.206.246"
+      }
+  - name: AAP_AUTH
+    required: true
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"admin/aap-test"'
+    meta:
+      authType: Ansible/Tower
+      subType: authentication
+meta:
+  version: 5
+  description: Simple Task to Run a singular AWX Job and monitor its status
+  layout: flow
+  workerGroup: default
+finally: null
