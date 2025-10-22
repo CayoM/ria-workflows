@@ -107,8 +107,7 @@ blocks:
   - name: AAP_Auth
     action: authOverride
     authentication: '"admin/awx"'
-    override: "{\"host\":$get_aap_password.result,\"username\":\"admin\",\"password\"\
-      :$get_aap_password.result}"
+    override: "{\"host\":$get_aap_url.result,\"username\":\"admin\",\"password\":$get_aap_password.result}"
   - action: system/Ansible/Tower/Credentials/Credentials Update
     name: Ansible_1
     inputs:
