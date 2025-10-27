@@ -1,6 +1,17 @@
 name: End-to-End-Automation
 platform: node
 blocks:
+  - action: if
+    name: domain_is_invalid
+    condition: "$instance_name.match(/^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/)\
+      \ ? false : true"
+    then:
+      - action: assign
+        name: Invalid_Domain
+        variable: $result
+        value: '"Instance Name is not valid"'
+      - action: exit
+    else: []
   - action: switch
     name: SwitchCase_1
     expression: $instance_type
@@ -15,6 +26,10 @@ blocks:
             name: Assign_3
             variable: $target_ip
             value: $onprem_ip
+          - action: assign
+            name: Assign_3_1
+            variable: $cloud_provider
+            value: '"OnPrem"'
           - action: ./HCP_Vault_Dedicated_Get_Secret
             name: User_1
             inputs:
@@ -40,6 +55,10 @@ blocks:
             name: Assign_6
             variable: $target_ip
             value: $5g_ip
+          - action: assign
+            name: Assign_6_1
+            variable: $cloud_provider
+            value: '"5G"'
           - action: ./HCP_Vault_Dedicated_Get_Secret
             name: User_2
             inputs:
@@ -182,7 +201,8 @@ blocks:
               "feature_sevone": $feature_sevone,
               "feature_turbonomic": $feature_turbonomic,
               "feature_hcm": $feature_hcm,
-              "app_name": $app_name
+              "app_name": $app_name,
+              "cloud_provider": $cloud_provider
           }
   - action: if
     name: If_1
@@ -362,7 +382,7 @@ variables:
     level: INTERMEDIATE
     type:
       type: string
-    value: '"robotshop"'
+    value: '"camera"'
   - name: feature_kubecost
     required: false
     isInput: true
@@ -442,7 +462,15 @@ variables:
     level: INTERMEDIATE
     type:
       type: string
-    value: '""'
+    value: '"192.168.1.192"'
+  - name: cloud_provider
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"AWS"'
 meta:
   version: 5
   layout: flow
