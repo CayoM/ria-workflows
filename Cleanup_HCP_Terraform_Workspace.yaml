@@ -1,0 +1,138 @@
+name: Cleanup_HCP_Terraform_Workspace
+platform: node
+blocks:
+  - action: foreach
+    name: Get_secrets
+    list: $SECRETS
+    blocks:
+      - action: ./HCP_Vault_Dedicated_Get_Secret
+        name: get_secret
+        inputs:
+          - name: secret_name
+            value: $Get_secrets.item
+          - name: HCP_AUTH_SECRET
+            value: $HCP_VAULT_AUTH_SECRET
+      - action: system/Common/Array/Array Push
+        name: ArrayPush_1
+        inputs:
+          - name: array
+            value: $retrieved_secrets
+          - name: item
+            value: |-
+              {
+                  "Name": $Get_secrets.item,
+                  "Content": $get_secret.result
+              }
+  - action: system/Common/Status Message Update
+    name: StatusMessageUpdate_1
+    inputs:
+      - name: message
+        value: "\"Retrieved Secrets successfully: \"+$retrieved_secrets"
+  - action: system/Common/JSON/jq
+    name: filter_terraform_api_key
+    inputs:
+      - name: JSON
+        value: $retrieved_secrets
+      - name: Filter
+        value: "\".[] | select(.Name == \\\"\" + $HCP_TERRAFORM_ENTERPRISE_TOKEN_IDENTIFIER\
+          \ + \"\\\") | .Content\""
+  - action: comment
+    value: Override authentication in order to use the token fetched from HCP Vault
+  - name: AuthOverride_1
+    action: authOverride
+    authentication: '"admin/terraform"'
+    override: "{\"apiKey\":$filter_terraform_api_key.result}"
+    breakpoint: enabled
+  - action: system/HashiCorp/Terraform/Workspaces/List workspaces
+    name: HashiCorp_3
+    inputs:
+      - name: authKey
+        value: $AuthOverride_1.result
+      - name: organization_name
+        value: $HCP_TERRAFORM_ORG_NAME
+  - action: foreach
+    name: ForEach_1
+    list: $HashiCorp_3.result.data
+    blocks:
+      - action: if
+        name: If_1
+        breakpoint: enabled
+        condition: "($ForEach_1.item.attributes[\"auto-destroy-status\"] == \"applied\"\
+          ) && ($ForEach_1.item.attributes.actions[\"is-destroyable\"] == true)"
+        then:
+          - action: system/HashiCorp/Terraform/Workspaces/Delete a workspace
+            name: HashiCorp_4
+            inputs:
+              - name: authKey
+                value: $AuthOverride_1.result
+              - name: workspace_id
+                value: $ForEach_1.item.id
+            breakpoint: enabled
+          - action: assign
+            name: Assign_1
+            variable: $result
+            value: $HashiCorp_4.result
+            breakpoint: enabled
+        else: []
+variables:
+  - name: result
+    required: false
+    isInput: false
+    isOutput: true
+    level: INTERMEDIATE
+    type:
+      type: object
+    value: "{}"
+  - name: HCP_TERRAFORM_ENTERPRISE_TOKEN_IDENTIFIER
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"terraform_api_key"'
+  - name: HCP_TERRAFORM_ORG_NAME
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"cayo-org"'
+  - name: SECRETS
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: array
+    value: |-
+      [
+          "terraform_api_key"
+      ]
+  - name: retrieved_secrets
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: array
+    value: "[]"
+  - name: HCP_VAULT_AUTH_SECRET
+    required: false
+    isInput: false
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"admin/vault"'
+    meta:
+      authType: Common/ConfigData
+      subType: authentication
+meta:
+  version: 5
+  layout: flow
+  workerGroup: default
+  description: This workflow cleans up an empty Workspace in HCP Terraform (the resources
+    inside the workspace are set to be delete after 1 hour without changes).
+finally: null
