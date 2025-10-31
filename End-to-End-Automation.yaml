@@ -84,6 +84,8 @@ blocks:
             value: $instance_type
           - name: HCP_VAULT_AUTH_SECRET
             value: $vault_auth
+          - name: service_type
+            value: $service_type
       - action: assign
         name: Assign_2
         variable: $target_ip
@@ -299,7 +301,7 @@ variables:
     level: INTERMEDIATE
     type:
       type: string
-    value: '"5G"'
+    value: '"t3.2xlarge"'
   - name: service_type
     required: false
     isInput: true

@@ -388,7 +388,7 @@ variables:
     value: "true"
   - name: service_type
     required: false
-    isInput: false
+    isInput: true
     isOutput: false
     level: INTERMEDIATE
     type:
