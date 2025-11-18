@@ -129,13 +129,30 @@ blocks:
     action: authOverride
     authentication: '"admin/awx"'
     override: "{\"host\":$get_aap_url.result,\"username\":\"admin\",\"password\":$get_aap_password.result}"
+  - action: ./Update-Credential-By-Name
+    name: User_4
+    inputs:
+      - name: auth
+        value: $AAP_Auth.result
+      - name: name
+        value: '"Default"'
+      - name: credential_data
+        value: |-
+          {
+              "credential_type": 1,
+
+              "inputs": {
+                  "ssh_key_data": $ssh_key,
+                  "username": $ssh_username
+              },
+              "name": "Default",
+              "organization": 1
+          }
   - action: system/Ansible/Tower/Credentials/Credentials Update
     name: Ansible_1
     inputs:
       - name: authKey
         value: $AAP_Auth.result
-      - name: id
-        value: "1"
       - name: data
         value: |-
           {
@@ -148,6 +165,7 @@ blocks:
               "name": "Default",
               "organization": 1
           }
+    skipped: true
   - action: ./HCP_Vault_Dedicated_Get_Secret
     name: get_secret_instana_agent_key
     inputs:
@@ -293,7 +311,7 @@ variables:
     level: INTERMEDIATE
     type:
       type: string
-    value: '"Mobile"'
+    value: '"cayoback1111"'
   - name: instance_type
     required: false
     isInput: true
@@ -384,7 +402,7 @@ variables:
     level: INTERMEDIATE
     type:
       type: string
-    value: '"camera"'
+    value: '"robotshop"'
   - name: feature_kubecost
     required: false
     isInput: true
