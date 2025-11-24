@@ -86,6 +86,24 @@ blocks:
             value: $vault_auth
           - name: service_type
             value: $service_type
+          - name: feature_turbonomic
+            value: $feature_turbonomic
+          - name: feature_hcm
+            value: $feature_hcm
+          - name: feature_sevone
+            value: $feature_sevone
+          - name: feature_instana
+            value: $feature_instana
+          - name: feature_kubecost
+            value: $feature_kubecost
+          - name: ansible_app_name
+            value: $app_name
+          - name: ansible_remote_user
+            value: $ssh_username
+          - name: ansible_remote_port
+            value: $port
+          - name: ansible_var_location
+            value: $location
       - action: assign
         name: Assign_2
         variable: $target_ip
@@ -238,6 +256,15 @@ blocks:
           - name: AAP_AUTH
             value: $AAP_Auth.result
     else:
+      - action: ./AAP-watch-job-by-name
+        name: User_5
+        inputs:
+          - name: aap_job_name
+            value: '"setup-ec2-instance-automated"'
+          - name: AAP_AUTH
+            value: $AAP_Auth.result
+          - name: instance_name
+            value: $instance_name
       - action: ./AAP-run-job-by-name
         name: Configure_with_ansible
         inputs:
@@ -247,6 +274,7 @@ blocks:
             value: $aap_job_data
           - name: AAP_AUTH
             value: $AAP_Auth.result
+        skipped: true
   - action: if
     name: If_2
     condition: $instance_type == "5G" || $instance_type == "On Premise"
@@ -311,7 +339,7 @@ variables:
     level: INTERMEDIATE
     type:
       type: string
-    value: '"cayoback1111"'
+    value: '"cayoback2222"'
   - name: instance_type
     required: false
     isInput: true
@@ -393,8 +421,8 @@ variables:
     isOutput: false
     level: INTERMEDIATE
     type:
-      type: number
-    value: "22"
+      type: string
+    value: '"22"'
   - name: app_name
     required: false
     isInput: true
@@ -409,40 +437,40 @@ variables:
     isOutput: false
     level: INTERMEDIATE
     type:
-      type: boolean
-    value: "false"
+      type: string
+    value: '"false"'
   - name: feature_instana
     required: false
     isInput: true
     isOutput: false
     level: INTERMEDIATE
     type:
-      type: boolean
-    value: "false"
+      type: string
+    value: '"false"'
   - name: feature_sevone
     required: false
     isInput: true
     isOutput: false
     level: INTERMEDIATE
     type:
-      type: boolean
-    value: "false"
+      type: string
+    value: '"false"'
   - name: feature_hcm
     required: false
     isInput: true
     isOutput: false
     level: INTERMEDIATE
     type:
-      type: boolean
-    value: "true"
+      type: string
+    value: '"true"'
   - name: feature_turbonomic
     required: false
     isInput: true
     isOutput: false
     level: INTERMEDIATE
     type:
-      type: boolean
-    value: "false"
+      type: string
+    value: '"false"'
   - name: ssh_key
     required: false
     isInput: false

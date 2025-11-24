@@ -56,7 +56,7 @@ blocks:
   - action: if
     name: If_3
     breakpoint: enabled
-    condition: $feature_turbonomic
+    condition: $feature_turbonomic == "true"
     then:
       - action: assign
         name: Assign_3
@@ -202,6 +202,146 @@ blocks:
                   "attributes": {
                       "key": "instance_name",
                       "value": $HCP_TERRAFORM_WORKSPACE_NAME,
+                      "category": "terraform"
+                  }
+              }
+          }
+      - name: workspace_id
+        value: $create_workspace.result.data.id
+  - action: system/HashiCorp/Terraform/Workspace Variables/Create a Variable
+    name: create_var_feature_hcm
+    inputs:
+      - name: authKey
+        value: $AuthOverride_1.result
+      - name: body
+        value: |-
+          {
+              "data": {
+                  "type": "vars",
+
+                  "attributes": {
+                      "key": "ansible_var_feature_hcm",
+                      "value": $feature_hcm,
+                      "category": "terraform"
+                  }
+              }
+          }
+      - name: workspace_id
+        value: $create_workspace.result.data.id
+  - action: system/HashiCorp/Terraform/Workspace Variables/Create a Variable
+    name: create_var_feature_instana
+    inputs:
+      - name: authKey
+        value: $AuthOverride_1.result
+      - name: body
+        value: |-
+          {
+              "data": {
+                  "type": "vars",
+
+                  "attributes": {
+                      "key": "ansible_var_feature_instana",
+                      "value": $feature_instana,
+                      "category": "terraform"
+                  }
+              }
+          }
+      - name: workspace_id
+        value: $create_workspace.result.data.id
+  - action: system/HashiCorp/Terraform/Workspace Variables/Create a Variable
+    name: create_var_feature_kubecost
+    inputs:
+      - name: authKey
+        value: $AuthOverride_1.result
+      - name: body
+        value: |-
+          {
+              "data": {
+                  "type": "vars",
+
+                  "attributes": {
+                      "key": "ansible_var_feature_kubecost",
+                      "value": $feature_kubecost,
+                      "category": "terraform"
+                  }
+              }
+          }
+      - name: workspace_id
+        value: $create_workspace.result.data.id
+  - action: system/HashiCorp/Terraform/Workspace Variables/Create a Variable
+    name: create_var_feature_sevone
+    inputs:
+      - name: authKey
+        value: $AuthOverride_1.result
+      - name: body
+        value: |-
+          {
+              "data": {
+                  "type": "vars",
+
+                  "attributes": {
+                      "key": "ansible_var_feature_sevone",
+                      "value": $feature_sevone,
+                      "category": "terraform"
+                  }
+              }
+          }
+      - name: workspace_id
+        value: $create_workspace.result.data.id
+  - action: system/HashiCorp/Terraform/Workspace Variables/Create a Variable
+    name: create_var_ansible_remote_user
+    inputs:
+      - name: authKey
+        value: $AuthOverride_1.result
+      - name: body
+        value: |-
+          {
+              "data": {
+                  "type": "vars",
+
+                  "attributes": {
+                      "key": "ansible_var_remote_user",
+                      "value": $ansible_remote_user,
+                      "category": "terraform"
+                  }
+              }
+          }
+      - name: workspace_id
+        value: $create_workspace.result.data.id
+  - action: system/HashiCorp/Terraform/Workspace Variables/Create a Variable
+    name: create_var_ansible_remote_port
+    inputs:
+      - name: authKey
+        value: $AuthOverride_1.result
+      - name: body
+        value: |-
+          {
+              "data": {
+                  "type": "vars",
+
+                  "attributes": {
+                      "key": "ansible_var_port",
+                      "value": $ansible_remote_port,
+                      "category": "terraform"
+                  }
+              }
+          }
+      - name: workspace_id
+        value: $create_workspace.result.data.id
+  - action: system/HashiCorp/Terraform/Workspace Variables/Create a Variable
+    name: create_var_ansible_location
+    inputs:
+      - name: authKey
+        value: $AuthOverride_1.result
+      - name: body
+        value: |-
+          {
+              "data": {
+                  "type": "vars",
+
+                  "attributes": {
+                      "key": "ansible_var_location",
+                      "value": $ansible_var_location,
                       "category": "terraform"
                   }
               }
@@ -378,14 +518,6 @@ variables:
     meta:
       authType: Common/ConfigData
       subType: authentication
-  - name: feature_turbonomic
-    required: true
-    isInput: true
-    isOutput: false
-    level: INTERMEDIATE
-    type:
-      type: boolean
-    value: "true"
   - name: service_type
     required: false
     isInput: true
@@ -394,6 +526,78 @@ variables:
     type:
       type: string
     value: '"frontend"'
+  - name: feature_turbonomic
+    required: true
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"true"'
+  - name: feature_hcm
+    required: true
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"false"'
+  - name: feature_sevone
+    required: true
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"false"'
+  - name: feature_instana
+    required: true
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"false"'
+  - name: feature_kubecost
+    required: true
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"false"'
+  - name: ansible_app_name
+    required: true
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"robotshop"'
+  - name: ansible_remote_user
+    required: true
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"ubuntu"'
+  - name: ansible_remote_port
+    required: true
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"22"'
+  - name: ansible_var_location
+    required: true
+    isInput: true
+    isOutput: false
+    level: INTERMEDIATE
+    type:
+      type: string
+    value: '"south"'
 meta:
   version: 5
   layout: flow
